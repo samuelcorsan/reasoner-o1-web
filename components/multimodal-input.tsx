@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
 import type {
   Attachment,
   ChatRequestOptions,
   CreateMessage,
   Message,
-} from 'ai';
-import cx from 'classnames';
-import type React from 'react';
+} from "ai";
+import cx from "classnames";
+import type React from "react";
 import {
   useRef,
   useEffect,
@@ -17,18 +17,25 @@ import {
   type SetStateAction,
   type ChangeEvent,
   memo,
-} from 'react';
-import { toast } from 'sonner';
-import { useLocalStorage, useWindowSize } from 'usehooks-ts';
+} from "react";
+import { toast } from "sonner";
+import { useLocalStorage, useWindowSize } from "usehooks-ts";
 
-import { sanitizeUIMessages } from '@/lib/utils';
+import { convertJson, sanitizeUIMessages } from "@/lib/utils";
 
-import { ArrowUpIcon, PaperclipIcon, StopIcon } from './icons';
-import { PreviewAttachment } from './preview-attachment';
-import { Button } from './ui/button';
-import { Textarea } from './ui/textarea';
-import { SuggestedActions } from './suggested-actions';
-import equal from 'fast-deep-equal';
+import { ArrowUpIcon, PaperclipIcon, StopIcon } from "./icons";
+import { PreviewAttachment } from "./preview-attachment";
+import { Button } from "./ui/button";
+import { Textarea } from "./ui/textarea";
+import { SuggestedActions } from "./suggested-actions";
+import equal from "fast-deep-equal";
+import { Thought } from "@/lib/types";
+
+interface ChainOfThoughtStep {
+  title: string;
+  content: string;
+  next_action: string;
+}
 
 function PureMultimodalInput({
   chatId,
@@ -43,6 +50,8 @@ function PureMultimodalInput({
   append,
   handleSubmit,
   className,
+  chainOfThought,
+  setChainOfThought,
 }: {
   chatId: string;
   input: string;
@@ -55,15 +64,17 @@ function PureMultimodalInput({
   setMessages: Dispatch<SetStateAction<Array<Message>>>;
   append: (
     message: Message | CreateMessage,
-    chatRequestOptions?: ChatRequestOptions,
+    chatRequestOptions?: ChatRequestOptions
   ) => Promise<string | null | undefined>;
   handleSubmit: (
     event?: {
       preventDefault?: () => void;
     },
-    chatRequestOptions?: ChatRequestOptions,
+    chatRequestOptions?: ChatRequestOptions
   ) => void;
   className?: string;
+  chainOfThought: ChainOfThoughtStep[];
+  setChainOfThought: Dispatch<SetStateAction<Thought[]>>;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { width } = useWindowSize();
@@ -76,21 +87,24 @@ function PureMultimodalInput({
 
   const adjustHeight = () => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight + 2}px`;
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${
+        textareaRef.current.scrollHeight + 2
+      }px`;
     }
   };
 
   const [localStorageInput, setLocalStorageInput] = useLocalStorage(
-    'input',
-    '',
+    "input",
+    ""
   );
+  const [uiInput, setUiInput] = useState("");
 
   useEffect(() => {
     if (textareaRef.current) {
       const domValue = textareaRef.current.value;
       // Prefer DOM value over localStorage to handle hydration
-      const finalValue = domValue || localStorageInput || '';
+      const finalValue = domValue || localStorageInput || "";
       setInput(finalValue);
       adjustHeight();
     }
@@ -103,6 +117,7 @@ function PureMultimodalInput({
   }, [input, setLocalStorageInput]);
 
   const handleInput = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setUiInput(event.target.value);
     setInput(event.target.value);
     adjustHeight();
   };
@@ -110,18 +125,77 @@ function PureMultimodalInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadQueue, setUploadQueue] = useState<Array<string>>([]);
 
-  const submitForm = useCallback(() => {
-    window.history.replaceState({}, '', `/chat/${chatId}`);
+  const submitForm = useCallback(async () => {
+    setUiInput("");
+    window.history.replaceState({}, "", `/chat/${chatId}`);
 
-    handleSubmit(undefined, {
-      experimental_attachments: attachments,
-    });
+    const fakeMessage: Message = {
+      content: input,
+      createdAt: new Date(),
+      experimental_attachments: undefined,
+      id: `fake-${Date.now()}`,
+      role: "user",
+    };
+
+    setMessages((prev) => [...prev, fakeMessage]);
+
+    setChainOfThought([
+      {
+        title: "Analyzing the request",
+        content:
+          "Analyzing the user's request in order to create a chain of thought.",
+        next_action: "continue",
+      },
+    ]);
+
+    let tmpAttachments = attachments;
 
     setAttachments([]);
-    setLocalStorageInput('');
+    setLocalStorageInput("");
 
     if (width && width > 768) {
       textareaRef.current?.focus();
+    }
+
+    try {
+      const response = await fetch("/api/iterations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ input }),
+      });
+
+      const iterations = await response.json();
+
+      const cotResponse = await fetch("/api/chain-of-thought", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ input }),
+      });
+
+      let cotData;
+
+      if (cotResponse.ok) {
+        cotData = await cotResponse.json();
+        setChainOfThought(convertJson(cotData.text));
+      } else {
+        console.error("Error");
+      }
+
+      setMessages((prev) => prev.filter((msg) => msg.id !== fakeMessage.id));
+
+      handleSubmit(undefined, {
+        experimental_attachments: tmpAttachments,
+        body: {
+          cot: convertJson(cotData.text),
+          iterations: iterations.iterations,
+        },
+      });
+    } catch (error) {
+      console.error("Error al llamar a /api/iterations:", error);
     }
   }, [
     attachments,
@@ -130,15 +204,16 @@ function PureMultimodalInput({
     setLocalStorageInput,
     width,
     chatId,
+    input,
   ]);
 
   const uploadFile = async (file: File) => {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
 
     try {
-      const response = await fetch('/api/files/upload', {
-        method: 'POST',
+      const response = await fetch("/api/files/upload", {
+        method: "POST",
         body: formData,
       });
 
@@ -155,7 +230,7 @@ function PureMultimodalInput({
       const { error } = await response.json();
       toast.error(error);
     } catch (error) {
-      toast.error('Failed to upload file, please try again!');
+      toast.error("Failed to upload file, please try again!");
     }
   };
 
@@ -169,7 +244,7 @@ function PureMultimodalInput({
         const uploadPromises = files.map((file) => uploadFile(file));
         const uploadedAttachments = await Promise.all(uploadPromises);
         const successfullyUploadedAttachments = uploadedAttachments.filter(
-          (attachment) => attachment !== undefined,
+          (attachment) => attachment !== undefined
         );
 
         setAttachments((currentAttachments) => [
@@ -177,12 +252,12 @@ function PureMultimodalInput({
           ...successfullyUploadedAttachments,
         ]);
       } catch (error) {
-        console.error('Error uploading files!', error);
+        console.error("Error uploading files!", error);
       } finally {
         setUploadQueue([]);
       }
     },
-    [setAttachments],
+    [setAttachments]
   );
 
   return (
@@ -212,9 +287,9 @@ function PureMultimodalInput({
             <PreviewAttachment
               key={filename}
               attachment={{
-                url: '',
+                url: "",
                 name: filename,
-                contentType: '',
+                contentType: "",
               }}
               isUploading={true}
             />
@@ -225,20 +300,20 @@ function PureMultimodalInput({
       <Textarea
         ref={textareaRef}
         placeholder="Send a message..."
-        value={input}
+        value={uiInput}
         onChange={handleInput}
         className={cx(
-          'min-h-[24px] max-h-[calc(75dvh)] overflow-hidden resize-none rounded-xl !text-base bg-muted',
-          className,
+          "min-h-[24px] max-h-[calc(75dvh)] overflow-hidden resize-none rounded-xl !text-base bg-muted",
+          className
         )}
         rows={3}
         autoFocus
         onKeyDown={(event) => {
-          if (event.key === 'Enter' && !event.shiftKey) {
+          if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
 
             if (isLoading) {
-              toast.error('Please wait for the model to finish its response!');
+              toast.error("Please wait for the model to finish its response!");
             } else {
               submitForm();
             }
@@ -293,5 +368,5 @@ export const MultimodalInput = memo(
     if (!equal(prevProps.attachments, nextProps.attachments)) return false;
 
     return true;
-  },
+  }
 );

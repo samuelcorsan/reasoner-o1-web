@@ -1,29 +1,30 @@
-'use client';
+"use client";
 
-import { motion } from 'framer-motion';
-import { Button } from './ui/button';
-import { ChatRequestOptions, CreateMessage, Message } from 'ai';
-import { memo } from 'react';
+import { motion } from "framer-motion";
+import { Button } from "./ui/button";
+import { ChatRequestOptions, CreateMessage, Message } from "ai";
+import { memo } from "react";
 
 interface SuggestedActionsProps {
   chatId: string;
   append: (
     message: Message | CreateMessage,
-    chatRequestOptions?: ChatRequestOptions,
+    chatRequestOptions?: ChatRequestOptions
   ) => Promise<string | null | undefined>;
 }
 
 function PureSuggestedActions({ chatId, append }: SuggestedActionsProps) {
   const suggestedActions = [
     {
-      title: 'What is the weather',
-      label: 'in San Francisco?',
-      action: 'What is the weather in San Francisco?',
+      title: "Which number is greater",
+      label: "9.9 or 9.11?",
+      action: "Which number is greater: 9.9 or 9.11?",
     },
     {
-      title: 'Help me draft an essay',
-      label: 'about Silicon Valley',
-      action: 'Help me draft a short essay about Silicon Valley',
+      title: "How many numbers between 1 and 100",
+      label: "contain the digit 7?",
+      action:
+        "If you count from 1 to 100, how many times will you say a number containing the digit 7?",
     },
   ];
 
@@ -36,15 +37,15 @@ function PureSuggestedActions({ chatId, append }: SuggestedActionsProps) {
           exit={{ opacity: 0, y: 20 }}
           transition={{ delay: 0.05 * index }}
           key={`suggested-action-${suggestedAction.title}-${index}`}
-          className={index > 1 ? 'hidden sm:block' : 'block'}
+          className={index > 1 ? "hidden sm:block" : "block"}
         >
           <Button
             variant="ghost"
             onClick={async () => {
-              window.history.replaceState({}, '', `/chat/${chatId}`);
+              window.history.replaceState({}, "", `/chat/${chatId}`);
 
               append({
-                role: 'user',
+                role: "user",
                 content: suggestedAction.action,
               });
             }}
