@@ -219,6 +219,7 @@ export function getMessageIdFromAnnotations(message: Message) {
   const [annotation] = message.annotations;
   if (!annotation) return message.id;
 
+  //@ts-ignore
   return annotation.messageIdFromServer;
 }
 

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+//@ts-ignore
+import { useActionState, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AuthForm } from "@/components/auth-form";
@@ -16,7 +17,12 @@ export default function Page() {
   const [email, setEmail] = useState("");
   const [isSuccessful, setIsSuccessful] = useState(false);
 
-  const [state, setState] = useState<RegisterActionState>({ status: "idle" });
+  const [state, formAction] = useActionState<RegisterActionState, FormData>(
+    register,
+    {
+      status: "idle",
+    }
+  );
 
   useEffect(() => {
     if (state.status === "user_exists") {
@@ -32,16 +38,9 @@ export default function Page() {
     }
   }, [state, router]);
 
-  const handleSubmit = async (formData: FormData) => {
+  const handleSubmit = (formData: FormData) => {
     setEmail(formData.get("email") as string);
-    setState({ status: "in_progress" });
-    try {
-      const result = await register(state, formData);
-
-      setState(result);
-    } catch (error) {
-      setState({ status: "failed" });
-    }
+    formAction(formData);
   };
 
   return (
@@ -53,7 +52,7 @@ export default function Page() {
             Create an account with your email and password
           </p>
         </div>
-        <AuthForm onSubmit={handleSubmit} defaultEmail={email}>
+        <AuthForm action={handleSubmit} defaultEmail={email}>
           <SubmitButton isSuccessful={isSuccessful}>Sign Up</SubmitButton>
           <p className="text-center text-sm text-gray-600 mt-4 dark:text-zinc-400">
             {"Already have an account? "}

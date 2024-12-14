@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+//@ts-ignore
+import { useActionState, useEffect, useState } from "react";
 import { toast } from "sonner";
+
 import { AuthForm } from "@/components/auth-form";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -15,7 +17,12 @@ export default function Page() {
   const [email, setEmail] = useState("");
   const [isSuccessful, setIsSuccessful] = useState(false);
 
-  const [state, setState] = useState<LoginActionState>({ status: "idle" });
+  const [state, formAction] = useActionState<LoginActionState, FormData>(
+    login,
+    {
+      status: "idle",
+    }
+  );
 
   useEffect(() => {
     if (state.status === "failed") {
@@ -28,17 +35,9 @@ export default function Page() {
     }
   }, [state.status, router]);
 
-  const handleSubmit = async (formData: FormData) => {
+  const handleSubmit = (formData: FormData) => {
     setEmail(formData.get("email") as string);
-    setState({ status: "in_progress" });
-    try {
-      const result = await login(state, formData);
-
-      setState(result);
-    } catch (error) {
-      // Handle any unexpected errors
-      setState({ status: "failed" });
-    }
+    formAction(formData);
   };
 
   return (
@@ -50,7 +49,7 @@ export default function Page() {
             Use your email and password to sign in
           </p>
         </div>
-        <AuthForm onSubmit={handleSubmit} defaultEmail={email}>
+        <AuthForm action={handleSubmit} defaultEmail={email}>
           <SubmitButton isSuccessful={isSuccessful}>Sign in</SubmitButton>
           <p className="text-center text-sm text-gray-600 mt-4 dark:text-zinc-400">
             {"Don't have an account? "}

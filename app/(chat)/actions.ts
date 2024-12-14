@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 
 import { groq } from "@ai-sdk/groq";
 import {
+  deleteAllChatsByUserId,
   deleteMessagesByChatIdAfterTimestamp,
   getMessageById,
   updateChatVisiblityById,
@@ -73,4 +74,8 @@ export async function updateChatVisibility({
   visibility: VisibilityType;
 }) {
   await updateChatVisiblityById({ chatId, visibility });
+}
+
+export async function deleteAllChats() {
+  await deleteAllChatsByUserId();
 }
