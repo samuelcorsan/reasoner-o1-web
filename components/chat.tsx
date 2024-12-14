@@ -142,6 +142,8 @@ export function Chat({
             reload={reload}
             votes={votes}
             isReadonly={isReadonly}
+            chainOfThought={chainOfThought}
+            setChainOfThought={setChainOfThought}
           />
         )}
       </AnimatePresence>

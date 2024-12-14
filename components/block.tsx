@@ -29,6 +29,7 @@ import { VersionFooter } from "./version-footer";
 import { BlockActions } from "./block-actions";
 import { BlockCloseButton } from "./block-close-button";
 import { BlockMessages } from "./block-messages";
+import { Thought } from "@/lib/types";
 
 export interface UIBlock {
   title: string;
@@ -61,6 +62,8 @@ function PureBlock({
   reload,
   votes,
   isReadonly,
+  chainOfThought,
+  setChainOfThought,
 }: {
   chatId: string;
   input: string;
@@ -88,6 +91,8 @@ function PureBlock({
     chatRequestOptions?: ChatRequestOptions
   ) => Promise<string | null | undefined>;
   isReadonly: boolean;
+  chainOfThought: Thought[];
+  setChainOfThought: Dispatch<SetStateAction<Thought[]>>;
 }) {
   const {
     data: documents,
@@ -311,6 +316,8 @@ function PureBlock({
                 append={append}
                 className="bg-background dark:bg-muted"
                 setMessages={setMessages}
+                chainOfThought={chainOfThought}
+                setChainOfThought={setChainOfThought}
               />
             </form>
           </div>
